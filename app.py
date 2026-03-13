@@ -90,26 +90,96 @@ st.markdown("""
 # 1. Load Model/Scaler
 @st.cache_resource
 def load_model_assets():
-    try:
-        m = joblib.load("xgb_best_model.pkl")
-        s = joblib.load("scaler.pkl")
-        return m, s
-    except Exception as e:
-        st.error(f"Error loading files: {e}")
+    import os
+    
+    model_path = "fair_electronics_model.pkl"
+    scaler_path = "refined_scaler.pkl"
+    
+    # Check if files exist
+    if not os.path.exists(model_path):
+        st.error(f"❌ **File Not Found:** `{model_path}`")
+        st.info("📁 Please ensure the model file exists in the current directory.")
+        st.code(f"Current directory: {os.getcwd()}")
+        st.write("**Expected file location:**")
+        st.code(os.path.abspath(model_path))
         return None, None
+    
+    if not os.path.exists(scaler_path):
+        st.error(f"❌ **File Not Found:** `{scaler_path}`")
+        st.info("📁 Please ensure the scaler file exists in the current directory.")
+        st.code(f"Current directory: {os.getcwd()}")
+        st.write("**Expected file location:**")
+        st.code(os.path.abspath(scaler_path))
+        return None, None
+    
+    # Try loading model
+    try:
+        m = joblib.load(model_path)
+        st.success(f"✅ Model loaded successfully: `{model_path}`")
+    except Exception as e:
+        st.error(f"❌ **Error Loading File:** `{model_path}`")
+        st.error(f"**Error Type:** `{type(e).__name__}`")
+        st.error(f"**Error Message:** {str(e)}")
+        
+        with st.expander("🔍 Detailed Error Information"):
+            st.write("**Full Error Traceback:**")
+            import traceback
+            st.code(traceback.format_exc())
+            
+            st.write("\n**Possible Causes:**")
+            st.write("- File was created with incompatible scikit-learn/xgboost version")
+            st.write("- File is corrupted or incomplete")
+            st.write("- Wrong file format")
+            st.write("- Missing dependencies")
+            
+            st.write("\n**Solutions:**")
+            st.write("1. Check your scikit-learn version: `pip show scikit-learn`")
+            st.write("2. Check your xgboost version: `pip show xgboost`")
+            st.write("3. Recreate the model file with your current environment")
+            st.write("4. Ensure all dependencies are installed")
+        
+        return None, None
+    
+    # Try loading scaler
+    try:
+        s = joblib.load(scaler_path)
+        st.success(f"✅ Scaler loaded successfully: `{scaler_path}`")
+    except Exception as e:
+        st.error(f"❌ **Error Loading File:** `{scaler_path}`")
+        st.error(f"**Error Type:** `{type(e).__name__}`")
+        st.error(f"**Error Message:** {str(e)}")
+        
+        with st.expander("🔍 Detailed Error Information"):
+            st.write("**Full Error Traceback:**")
+            import traceback
+            st.code(traceback.format_exc())
+            
+            st.write("\n**Possible Causes:**")
+            st.write("- File was created with incompatible scikit-learn version")
+            st.write("- File is corrupted or incomplete")
+            st.write("- Wrong file format")
+            
+            st.write("\n**Solutions:**")
+            st.write("1. Check your scikit-learn version: `pip show scikit-learn`")
+            st.write("2. Recreate the scaler file with your current environment")
+            st.write("3. Ensure scikit-learn is properly installed")
+        
+        return None, None
+    
+    return m, s
 
 model, scaler = load_model_assets()
-if model is None:
+if model is None or scaler is None:
     st.stop()
 
-st.title("🎯 Purchase Intent Prediction")
+st.title("Purchase Intent Prediction")
 
 # ---- INPUT SECTION ----
 with st.container(border=True):
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.markdown("#### 👤 User Info")
+        st.markdown("#### User Info")
         age = st.number_input(
             "Customer Age",
             min_value=10,
@@ -125,7 +195,7 @@ with st.container(border=True):
         )
 
     with col2:
-        st.markdown("#### 🛍️ Product")
+        st.markdown("#### Product")
         category = st.selectbox(
             "Category",
             ["Headphones", "Laptops", "Smart Watches", "Smartphones", "Tablets"],
@@ -140,7 +210,7 @@ with st.container(border=True):
         )
 
     with col3:
-        st.markdown("#### 💰 Pricing")
+        st.markdown("#### Pricing")
         price = st.number_input(
             "Product Price ($)",
             min_value=0.0,
@@ -149,7 +219,7 @@ with st.container(border=True):
         )
 
     with col4:
-        st.markdown("#### 🔄 Behavior")
+        st.markdown("#### Behavior")
         frequency = st.number_input(
             "Purchase Frequency",
             min_value=1,
@@ -159,9 +229,9 @@ with st.container(border=True):
         st.write("")
         calculate_clicked = st.button("Calculate Prediction", type="primary", use_container_width=True)
 
-# Exact feature order expected by model
+# Exact feature order expected by model (NO GENDER)
 model_order = [
-    'ProductPrice', 'CustomerAge', 'CustomerGender', 'PurchaseFrequency',
+    'ProductPrice', 'CustomerAge', 'PurchaseFrequency',
     'ProductCategory_Headphones', 'ProductCategory_Laptops',
     'ProductCategory_Smart Watches', 'ProductCategory_Smartphones',
     'ProductCategory_Tablets', 'ProductBrand_Apple', 'ProductBrand_HP',
@@ -173,7 +243,6 @@ model_order = [
 friendly_names = {
     'ProductPrice': 'Product Price',
     'CustomerAge': 'Customer Age',
-    'CustomerGender': 'Customer Gender',
     'PurchaseFrequency': 'Purchase Frequency',
     'ProductCategory_Headphones': 'Category: Headphones',
     'ProductCategory_Laptops': 'Category: Laptops',
@@ -294,30 +363,59 @@ if calculate_clicked:
     if not all_inputs_filled:
         st.warning("Please complete all fields before calculating the prediction.")
     else:
-        new_row = {col: 0 for col in model_order}
-        new_row["ProductPrice"] = price
-        new_row["CustomerAge"] = age
-        new_row["CustomerGender"] = 1 if gender == "Male" else 0
-        new_row["PurchaseFrequency"] = frequency
-        new_row["IsMostSoldBrand"] = 1 if brand in ["Apple", "Samsung"] else 0
-        new_row["Price Per Frequency"] = price / frequency if frequency > 0 else 0
-        new_row[f"ProductCategory_{category}"] = 1
-        new_row[f"ProductBrand_{brand}"] = 1
+        # Build input row to match scaler and model expectations
+        # Scaler expects these columns:
+        scaler_cols = [
+            'ProductPrice', 'CustomerAge', 'CustomerGender', 'PurchaseFrequency',
+            'ProductCategory_Headphones', 'ProductCategory_Laptops', 'ProductCategory_Smart Watches',
+            'ProductCategory_Smartphones', 'ProductCategory_Tablets',
+            'ProductBrand_Apple', 'ProductBrand_HP', 'ProductBrand_Other Brands',
+            'ProductBrand_Samsung', 'ProductBrand_Sony', 'IsMostSoldBrand', 'Price Per Frequency'
+        ]
+        model_cols = [
+            'CustomerAge', 'ProductCategory', 'ProductPrice', 'PurchaseFrequency', 'ProductBrand', 'CustomerSatisfaction'
+        ]
 
-        input_df = pd.DataFrame([new_row], columns=model_order)
+        # Prepare scaler input row
+        scaler_row = {col: 0 for col in scaler_cols}
+        scaler_row['ProductPrice'] = price
+        scaler_row['CustomerAge'] = age
+        scaler_row['CustomerGender'] = 1 if gender == 'Male' else 0  # Encode gender as 1/0
+        scaler_row['PurchaseFrequency'] = frequency
+        scaler_row['IsMostSoldBrand'] = 1 if brand in ["Apple", "Samsung"] else 0
+        scaler_row['Price Per Frequency'] = price / frequency if frequency > 0 else 0
+        scaler_row[f'ProductCategory_{category}'] = 1
+        scaler_row[f'ProductBrand_{brand}'] = 1
+
+        scaler_input_df = pd.DataFrame([scaler_row], columns=scaler_cols)
 
         try:
-            scaler_cols = ['ProductPrice', 'CustomerAge', 'PurchaseFrequency', 'Price Per Frequency']
-            input_df[scaler_cols] = scaler.transform(input_df[scaler_cols])
-            final_input = input_df[model_order]
+            scaler_input_df[scaler_cols] = scaler.transform(scaler_input_df[scaler_cols])
+        except Exception as e:
+            st.error(f"❌ Scaler Error: {type(e).__name__}")
+            st.error(f"Details: {str(e)}")
+            st.stop()
 
-            prob = model.predict_proba(final_input)[0][1]
+        # Prepare model input row
+        model_row = {
+            'CustomerAge': age,
+            'ProductCategory': category,
+            'ProductPrice': price,
+            'PurchaseFrequency': frequency,
+            'ProductBrand': brand,
+            'CustomerSatisfaction': 3  # Default value, adjust as needed
+        }
+        model_input_df = pd.DataFrame([model_row], columns=model_cols)
+
+        try:
+            prob = model.predict_proba(model_input_df)[0][1]
             prediction_ready = True
 
+            # Feature importance/SHAP (optional, may not work with categorical model)
             if SHAP_AVAILABLE:
                 try:
                     explainer = shap.TreeExplainer(model)
-                    shap_values = explainer.shap_values(final_input)
+                    shap_values = explainer.shap_values(model_input_df)
 
                     if isinstance(shap_values, list):
                         shap_vals = shap_values[1][0]
@@ -325,7 +423,7 @@ if calculate_clicked:
                         shap_vals = shap_values[0]
 
                     shap_df = pd.DataFrame({
-                        "Feature": [friendly_names.get(col, col) for col in final_input.columns],
+                        "Feature": [col for col in model_input_df.columns],
                         "Contribution": shap_vals
                     })
 
@@ -372,105 +470,33 @@ if calculate_clicked:
                         )
 
                 except Exception:
-                    if hasattr(model, "feature_importances_"):
-                        importances = model.feature_importances_
-                        values = final_input.iloc[0].values
-                        local_approx = importances * np.abs(values)
-
-                        imp_df = pd.DataFrame({
-                            "Feature": [friendly_names.get(col, col) for col in final_input.columns],
-                            "Contribution": local_approx
-                        })
-
-                        imp_df = imp_df[imp_df["Contribution"] > 0].copy()
-                        imp_df = imp_df.sort_values("Contribution", ascending=True).tail(10)
-
-                        if imp_df.empty:
-                            feature_fig = create_placeholder_feature_chart()
-                        else:
-                            theme = get_chart_theme()
-                            feature_fig = go.Figure(
-                                go.Bar(
-                                    x=imp_df["Contribution"],
-                                    y=imp_df["Feature"],
-                                    orientation="h",
-                                    marker_color=theme["fallback"],
-                                    text=[f"{v:.4f}" for v in imp_df["Contribution"]],
-                                    textposition="auto"
-                                )
-                            )
-
-                            feature_fig.update_layout(
-                                title={
-                                    "text": "Top Active Feature Influence",
-                                    "font": {"size": 20}
-                                },
-                                xaxis_title="Relative Influence",
-                                yaxis_title=None,
-                                height=400,
-                                margin=dict(l=20, r=20, t=50, b=20),
-                                xaxis=dict(
-                                    zeroline=True,
-                                    showline=True
-                                ),
-                                yaxis=dict(
-                                    showline=False
-                                )
-                            )
-                    else:
-                        feature_fig = create_placeholder_feature_chart()
-
-            else:
-                if hasattr(model, "feature_importances_"):
-                    importances = model.feature_importances_
-                    values = final_input.iloc[0].values
-                    local_approx = importances * np.abs(values)
-
-                    imp_df = pd.DataFrame({
-                        "Feature": [friendly_names.get(col, col) for col in final_input.columns],
-                        "Contribution": local_approx
-                    })
-
-                    imp_df = imp_df[imp_df["Contribution"] > 0].copy()
-                    imp_df = imp_df.sort_values("Contribution", ascending=True).tail(10)
-
-                    if imp_df.empty:
-                        feature_fig = create_placeholder_feature_chart()
-                    else:
-                        theme = get_chart_theme()
-                        feature_fig = go.Figure(
-                            go.Bar(
-                                x=imp_df["Contribution"],
-                                y=imp_df["Feature"],
-                                orientation="h",
-                                marker_color=theme["fallback"],
-                                text=[f"{v:.4f}" for v in imp_df["Contribution"]],
-                                textposition="auto"
-                            )
-                        )
-
-                        feature_fig.update_layout(
-                            title={
-                                "text": "Top Active Feature Influence",
-                                "font": {"size": 20}
-                            },
-                            xaxis_title="Relative Influence",
-                            yaxis_title=None,
-                            height=400,
-                            margin=dict(l=20, r=20, t=50, b=20),
-                            xaxis=dict(
-                                zeroline=True,
-                                showline=True
-                            ),
-                            yaxis=dict(
-                                showline=False
-                            )
-                        )
-                else:
                     feature_fig = create_placeholder_feature_chart()
+            else:
+                feature_fig = create_placeholder_feature_chart()
 
         except Exception as e:
-            st.error(f"Prediction Error: {e}")
+            st.error(f"❌ Prediction Error: {type(e).__name__}")
+            st.error(f"Details: {str(e)}")
+            
+            with st.expander("🔍 Troubleshooting Information"):
+                st.write("**Input DataFrame Info:**")
+                st.write(f"- Shape: {model_input_df.shape}")
+                st.write(f"- Columns: {list(model_input_df.columns)}")
+                
+                st.write("\n**Model Info:**")
+                if hasattr(model, 'n_features_in_'):
+                    st.write(f"- Expected features: {model.n_features_in_}")
+                if hasattr(model, 'feature_names_in_'):
+                    st.write(f"- Expected feature names: {list(model.feature_names_in_)}")
+                
+                st.write("\n**Scaler Info:**")
+                if hasattr(scaler, 'n_features_in_'):
+                    st.write(f"- Expected features: {scaler.n_features_in_}")
+                if hasattr(scaler, 'feature_names_in_'):
+                    st.write(f"- Expected feature names: {list(scaler.feature_names_in_)}")
+                
+                st.write("\n**Solution:**")
+                st.write("Check your input features and model training pipeline for consistency.")
 
 gauge_fig = create_gauge(prob)
 
